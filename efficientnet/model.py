@@ -62,7 +62,8 @@ class MBConvBlock(nn.Module):
         final_oup = self._block_args.output_filters
         self._project_conv = Conv2d(in_channels=oup, out_channels=final_oup, kernel_size=1, bias=False)
         self._bn2 = nn.BatchNorm2d(num_features=final_oup, momentum=self._bn_mom, eps=self._bn_eps)
-        self._swish = MemoryEfficientSwish()
+        # self._swish = MemoryEfficientSwish()
+        self._swish = Swish()
 
     def forward(self, inputs, drop_connect_rate=None):
         """
@@ -101,9 +102,10 @@ class MBConvBlock(nn.Module):
             x = x + inputs  # skip connection
         return x
 
-    def set_swish(self, memory_efficient=True):
+    def set_swish(self, memory_efficient=False):
         """Sets swish function as memory efficient (for training) or standard (for export)"""
-        self._swish = MemoryEfficientSwish() if memory_efficient else Swish()
+        # self._swish = MemoryEfficientSwish() if memory_efficient else Swish()
+        self._swish = Swish()
 
 
 class EfficientNet(nn.Module):
@@ -167,11 +169,13 @@ class EfficientNet(nn.Module):
         self._avg_pooling = nn.AdaptiveAvgPool2d(1)
         self._dropout = nn.Dropout(self._global_params.dropout_rate)
         self._fc = nn.Linear(out_channels, self._global_params.num_classes)
-        self._swish = MemoryEfficientSwish()
+        # self._swish = MemoryEfficientSwish()
+        self._swish = Swish()
 
     def set_swish(self, memory_efficient=True):
         """Sets swish function as memory efficient (for training) or standard (for export)"""
-        self._swish = MemoryEfficientSwish() if memory_efficient else Swish()
+        # self._swish = MemoryEfficientSwish() if memory_efficient else Swish()
+        self._swish = Swish()
         for block in self._blocks:
             block.set_swish(memory_efficient)
 
@@ -233,5 +237,6 @@ class EfficientNet(nn.Module):
     def _check_model_name_is_valid(cls, model_name):
         """ Validates model name. """
         valid_models = ['efficientnet-b'+str(i) for i in range(9)]
+        print(model_name)
         if model_name not in valid_models:
             raise ValueError('model_name should be one of: ' + ', '.join(valid_models))

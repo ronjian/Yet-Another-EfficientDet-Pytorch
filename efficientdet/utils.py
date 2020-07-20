@@ -90,9 +90,9 @@ class Anchors(nn.Module):
           ValueError: input size must be the multiple of largest feature stride.
         """
         image_shape = image.shape[2:]
-
-        if image_shape == self.last_shape and image.device in self.last_anchors:
-            return self.last_anchors[image.device]
+        # print('self.last_anchors', self.last_anchors)
+        # if image_shape == self.last_shape and image.device in self.last_anchors:
+        #     return self.last_anchors[image.device]
 
         if self.last_shape is None or self.last_shape != image_shape:
             self.last_shape = image_shape

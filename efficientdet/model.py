@@ -37,7 +37,8 @@ class SeparableConvBlock(nn.Module):
 
         self.activation = activation
         if self.activation:
-            self.swish = MemoryEfficientSwish() if not onnx_export else Swish()
+            # self.swish = MemoryEfficientSwish() if not onnx_export else Swish()
+            self.swish = Swish()
 
     def forward(self, x):
         x = self.depthwise_conv(x)
@@ -81,17 +82,22 @@ class BiFPN(nn.Module):
         self.conv7_down = SeparableConvBlock(num_channels, onnx_export=onnx_export)
 
         # Feature scaling layers
-        self.p6_upsample = nn.Upsample(scale_factor=2, mode='nearest')
-        self.p5_upsample = nn.Upsample(scale_factor=2, mode='nearest')
-        self.p4_upsample = nn.Upsample(scale_factor=2, mode='nearest')
-        self.p3_upsample = nn.Upsample(scale_factor=2, mode='nearest')
+        # self.p6_upsample = nn.Upsample(scale_factor=2, mode='nearest')
+        # self.p5_upsample = nn.Upsample(scale_factor=2, mode='nearest')
+        # self.p4_upsample = nn.Upsample(scale_factor=2, mode='nearest')
+        # self.p3_upsample = nn.Upsample(scale_factor=2, mode='nearest')
+        self.p6_upsample = nn.Upsample(size=8, mode='nearest')
+        self.p5_upsample = nn.Upsample(size=16, mode='nearest')
+        self.p4_upsample = nn.Upsample(size=32, mode='nearest')
+        self.p3_upsample = nn.Upsample(size=64, mode='nearest')
 
         self.p4_downsample = MaxPool2dStaticSamePadding(3, 2)
         self.p5_downsample = MaxPool2dStaticSamePadding(3, 2)
         self.p6_downsample = MaxPool2dStaticSamePadding(3, 2)
         self.p7_downsample = MaxPool2dStaticSamePadding(3, 2)
 
-        self.swish = MemoryEfficientSwish() if not onnx_export else Swish()
+        # self.swish = MemoryEfficientSwish() if not onnx_export else Swish()
+        self.swish = Swish()
 
         self.first_time = first_time
         if self.first_time:
@@ -174,7 +180,8 @@ class BiFPN(nn.Module):
         if self.attention:
             p3_out, p4_out, p5_out, p6_out, p7_out = self._forward_fast_attention(inputs)
         else:
-            p3_out, p4_out, p5_out, p6_out, p7_out = self._forward(inputs)
+            pass
+            # p3_out, p4_out, p5_out, p6_out, p7_out = self._forward(inputs)
 
         return p3_out, p4_out, p5_out, p6_out, p7_out
 
@@ -200,24 +207,28 @@ class BiFPN(nn.Module):
         weight = p6_w1 / (torch.sum(p6_w1, dim=0) + self.epsilon)
         # Connections for P6_0 and P7_0 to P6_1 respectively
         p6_up = self.conv6_up(self.swish(weight[0] * p6_in + weight[1] * self.p6_upsample(p7_in)))
+        # print('p7_in.size(), p6_up.size()', p7_in.size(), p6_up.size())
 
         # Weights for P5_0 and P6_1 to P5_1
         p5_w1 = self.p5_w1_relu(self.p5_w1)
         weight = p5_w1 / (torch.sum(p5_w1, dim=0) + self.epsilon)
         # Connections for P5_0 and P6_1 to P5_1 respectively
         p5_up = self.conv5_up(self.swish(weight[0] * p5_in + weight[1] * self.p5_upsample(p6_up)))
+        # print('p6_up.size(), p5_up.size()', p6_up.size(), p5_up.size())
 
         # Weights for P4_0 and P5_1 to P4_1
         p4_w1 = self.p4_w1_relu(self.p4_w1)
         weight = p4_w1 / (torch.sum(p4_w1, dim=0) + self.epsilon)
         # Connections for P4_0 and P5_1 to P4_1 respectively
         p4_up = self.conv4_up(self.swish(weight[0] * p4_in + weight[1] * self.p4_upsample(p5_up)))
+        # print('p5_up.size(), p4_up.size()', p5_up.size(), p4_up.size())
 
         # Weights for P3_0 and P4_1 to P3_2
         p3_w1 = self.p3_w1_relu(self.p3_w1)
         weight = p3_w1 / (torch.sum(p3_w1, dim=0) + self.epsilon)
         # Connections for P3_0 and P4_1 to P3_2 respectively
         p3_out = self.conv3_up(self.swish(weight[0] * p3_in + weight[1] * self.p3_upsample(p4_up)))
+        # print('p4_up.size(), p3_out.size()', p4_up.size(), p3_out.size())
 
         if self.first_time:
             p4_in = self.p4_down_channel_2(p4)
@@ -310,6 +321,7 @@ class Regressor(nn.Module):
 
     def __init__(self, in_channels, num_anchors, num_layers, onnx_export=False):
         super(Regressor, self).__init__()
+        onnx_export = True
         self.num_layers = num_layers
 
         self.conv_list = nn.ModuleList(
@@ -318,7 +330,8 @@ class Regressor(nn.Module):
             [nn.ModuleList([nn.BatchNorm2d(in_channels, momentum=0.01, eps=1e-3) for i in range(num_layers)]) for j in
              range(5)])
         self.header = SeparableConvBlock(in_channels, num_anchors * 4, norm=False, activation=False)
-        self.swish = MemoryEfficientSwish() if not onnx_export else Swish()
+        # self.swish = MemoryEfficientSwish() if not onnx_export else Swish()
+        self.swish = Swish()
 
     def forward(self, inputs):
         feats = []
@@ -355,7 +368,8 @@ class Classifier(nn.Module):
             [nn.ModuleList([nn.BatchNorm2d(in_channels, momentum=0.01, eps=1e-3) for i in range(num_layers)]) for j in
              range(5)])
         self.header = SeparableConvBlock(in_channels, num_anchors * num_classes, norm=False, activation=False)
-        self.swish = MemoryEfficientSwish() if not onnx_export else Swish()
+        # self.swish = MemoryEfficientSwish() if not onnx_export else Swish()
+        self.swish = Swish()
 
     def forward(self, inputs):
         feats = []
@@ -386,7 +400,8 @@ class EfficientNet(nn.Module):
 
     def __init__(self, compound_coef, load_weights=False):
         super(EfficientNet, self).__init__()
-        model = EffNet.from_pretrained(f'efficientnet-b{compound_coef}', load_weights)
+        # model = EffNet.from_pretrained(f'efficientnet-b{compound_coef}', load_weights)
+        model = EffNet.from_pretrained('efficientnet-b{}'.format(compound_coef), load_weights)
         del model._conv_head
         del model._bn1
         del model._avg_pooling
